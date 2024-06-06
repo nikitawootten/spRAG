@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
@@ -160,23 +161,23 @@ class KnowledgeBase:
     def cosine_similarity(self, v1, v2):
         return np.dot(v1, v2) # since the embeddings are normalized
 
-    def search(self, query: str, top_k: int) -> list:
+    def search(self, query: str, top_k: int, limit_to_doc_ids: Optional[list[str]] = None) -> list:
         """
         Get top k most relevant chunks for a given query. This is where we interface with the vector database.
         - returns a list of dictionaries, where each dictionary has the following keys: `metadata` (which contains 'doc_id', 'chunk_index', 'chunk_text', and 'chunk_header') and `similarity`
         """
         query_vector = self.get_embeddings(query, input_type="query") # embed the query
-        search_results = self.vector_db.search(query_vector, top_k) # do a vector database search
+        search_results = self.vector_db.search(query_vector, top_k, limit_to_doc_ids=limit_to_doc_ids) # do a vector database search
         search_results = self.reranker.rerank_search_results(query, search_results) # rerank search results using a reranker
         return search_results
     
-    def get_all_ranked_results(self, search_queries: list[str]):
+    def get_all_ranked_results(self, search_queries: list[str], limit_to_doc_ids: Optional[list[str]] = None):
         """
         - search_queries: list of search queries
         """
         all_ranked_results = []
         for query in search_queries:
-            ranked_results = self.search(query, 200)
+            ranked_results = self.search(query, 200, limit_to_doc_ids=limit_to_doc_ids)
             all_ranked_results.append(ranked_results)
         return all_ranked_results
     
@@ -187,7 +188,7 @@ class KnowledgeBase:
             segment += chunk_text
         return segment.strip()
     
-    def query(self, search_queries: list[str], rse_params: dict = {}, latency_profiling: bool = False) -> list[dict]:
+    def query(self, search_queries: list[str], rse_params: dict = {}, latency_profiling: bool = False, limit_to_doc_ids: Optional[list[str]] = None) -> list[dict]:
         """
         Inputs:
         - search_queries: list of search queries
@@ -229,7 +230,7 @@ class KnowledgeBase:
         overall_max_length += (len(search_queries) - 1) * overall_max_length_extension # increase the overall max length for each additional query
 
         start_time = time.time()
-        all_ranked_results = self.get_all_ranked_results(search_queries=search_queries)
+        all_ranked_results = self.get_all_ranked_results(search_queries=search_queries, limit_to_doc_ids=limit_to_doc_ids)
         if latency_profiling:
             print(f"get_all_ranked_results took {time.time() - start_time} seconds to run for {len(search_queries)} queries")
 

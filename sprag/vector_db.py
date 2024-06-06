@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from itertools import islice
+from typing import Optional
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 import os
@@ -40,7 +42,7 @@ class VectorDB(ABC):
         pass
 
     @abstractmethod
-    def search(self, query_vector, top_k=10):
+    def search(self, query_vector, top_k=10, limit_to_doc_ids: Optional[list[str]] = None):
         """
         Retrieve the top-k closest vectors to a given query vector.
         - needs to return results as list of dictionaries in this format: 
@@ -75,7 +77,7 @@ class BasicVectorDB(VectorDB):
         self.metadata.extend(metadata)
         self.save()
 
-    def search(self, query_vector, top_k=10):
+    def search(self, query_vector, top_k=10, limit_to_doc_ids: Optional[list[str]] = None):
         if not self.vectors:
             return []
         
@@ -85,7 +87,9 @@ class BasicVectorDB(VectorDB):
         similarities = cosine_similarity([query_vector], self.vectors)[0]
         indexed_similarities = sorted(enumerate(similarities), key=lambda x: x[1], reverse=True)
         results = []
-        for i, similarity in indexed_similarities[:top_k]:
+
+        raw_results = indexed_similarities if limit_to_doc_ids is None else filter(lambda x: self.metadata[x[0]]["doc_id"] in limit_to_doc_ids, indexed_similarities)
+        for i, similarity in islice(raw_results, top_k):
             result = {
                 'metadata': self.metadata[i],
                 'similarity': similarity,
